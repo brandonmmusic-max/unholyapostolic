@@ -24,6 +24,7 @@ docker run --rm --gpus "device=${GPUS}" \
   -e VLLM_ALLREDUCE_USE_SYMM_MEM=0 \
   -e VLLM_SPARSE_INDEXER_MAX_LOGITS_MB=2048 \
   -e VLLM_WORKER_MULTIPROC_METHOD=spawn \
+  -e VLLM_ENABLE_DEEPSEEK_V4_SPARSE_MLA_WARMUP=1 \
   "${IMAGE}" \
   vllm serve /model \
     --served-model-name deepseek-v4-flash \
