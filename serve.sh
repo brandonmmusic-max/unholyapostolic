@@ -44,5 +44,4 @@ docker run --rm --gpus "device=${GPUS}" \
     --reasoning-parser deepseek_v4 \
     --default-chat-template-kwargs.thinking true \
     --compilation-config '{"cudagraph_mode":"FULL_AND_PIECEWISE","custom_ops":["all"]}' \
-    --speculative-config.method mtp \
-    --speculative-config.num_speculative_tokens 3
+    --speculative-config '{"method":"mtp","num_speculative_tokens":3,"draft_sample_method":"probabilistic"}'

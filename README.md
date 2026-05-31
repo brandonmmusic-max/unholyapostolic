@@ -12,7 +12,7 @@ docker pull ghcr.io/brandonmmusic-max/unholyapostolic:latest    # GitHub Contain
 ```bash
 MODEL_PATH=/path/to/deepseek-v4-flash GPUS=0,1 ./serve.sh
 ```
-See [`serve.sh`](serve.sh) for the full command. It boots the 365-tok/s config (V2 model runner + MTP k=3 + native Lightning Indexer + parser-only reasoning + b12x PCIe all-reduce) and serves an OpenAI-compatible API on port 9201.
+See [`serve.sh`](serve.sh) for the full command. It boots the 365-tok/s config (V2 model runner + MTP k=3 with **`draft_sample_method=probabilistic`** + native Lightning Indexer + parser-only reasoning + b12x PCIe all-reduce) and serves an OpenAI-compatible API on port 9201.
 
 ## Numbers (2× RTX PRO 6000, TP2, 300 W cap each)
 | metric | original Lucifer (MTP baseline) | **unholyapostolic** |
@@ -23,6 +23,17 @@ See [`serve.sh`](serve.sh) for the full command. It boots the 365-tok/s config (
 | estonia retrieval (30-shot, byte-identical) | — | **28/30** (2 misses = stopping artifacts, not retrieval errors) |
 
 Reference point: a ~2,100 W TP4 community run measured **39.4 tok/s/request** decode at concurrency-30; this TP2 stack does **~52 tok/s/request** — faster per-request decode on **half the GPUs and ~⅓ the power.**
+
+## Decode vs temperature — MTP works under sampling
+vLLM's default `draft_sample_method="greedy"` makes the MTP drafter argmax-only, so under sampling (temperature > 0) the rejection sampler accepts **0%** of drafts and decode collapses from ~365 to ~90 tok/s. The serve config sets **`draft_sample_method=probabilistic`** — it samples the draft at the request temperature and feeds real draft probabilities to the rejection sampler, so MTP works at **every** temperature (fixes the upstream vLLM bug [#16899](https://github.com/vllm-project/vllm/pull/16899) / [#40149](https://github.com/vllm-project/vllm/issues/40149), upstream fix [#40269](https://github.com/vllm-project/vllm/pull/40269)):
+
+| temperature | default (greedy draft) | **`draft_sample_method=probabilistic`** |
+|---|---|---|
+| 0.0 (greedy) | 363.8 tok/s · accept 3.99 | **365.5 tok/s · accept 3.99** |
+| 0.7 (typical chat) | **90.8 tok/s · accept 1.00 (0%)** | **357.5 tok/s · accept 3.99** |
+| 1.0 | 90.9 tok/s · accept 1.00 (0%) | **357.7 tok/s · accept 3.99** |
+
+*(single-user, k=3, 2× RTX PRO 6000 / TP2 / 300 W; accept = mean accepted length, max 4 at k=3.)*
 
 ## What got the ~2× jump (in order of impact)
 1. **V2 model runner** (`VLLM_USE_V2_MODEL_RUNNER=1`) — the keystone. nsys profiling showed ~46% of each decode token was **GPU idle waiting on the host** (kernel-launch + piecewise-cudagraph gaps). The V2 runner collapses that per-sub-step host gap. Everything below only pays *because* of this.
