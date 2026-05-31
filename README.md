@@ -36,17 +36,40 @@ vLLM's default `draft_sample_method="greedy"` makes the MTP drafter argmax-only,
 *(single-user, k=3, 2× RTX PRO 6000 / TP2 / 300 W; accept = mean accepted length, max 4 at k=3. The 3.99 above is on a predictable probe prompt; on diverse content acceptance averages ~2.3 — see the full benchmark below — but the decode-speed recovery holds regardless.)*
 
 ## Full decode benchmark (`llm_decode_bench` v0.4.24, sampled @ temp 1.0, with the fix)
-Single-user decode under sampling across context lengths — the payoff of the fix (without it, all ~90 tok/s):
+Full concurrency × context sweep. **`conc=1` is the clean single-user number**; higher-concurrency cells are power/KV-limited at the 300 W / TP2 envelope (warmup timeouts), so read them as a floor, not a scaling curve.
 
-| context | single-user decode (tok/s) | single-prompt prefill (tok/s) |
-|---|---:|---:|
-| short (0) | **351** | — |
-| 16K | 342 | 7,378 |
-| 32K | 340 | 7,138 |
-| 64K | 333 | 6,644 |
-| 128K | **320** | 6,039 |
+**Aggregate decode tok/s**
 
-MTP acceptance over the full run: **mean 2.3 / ~44%** (222 windows) — consistent with estonia (2.4 / 46%), i.e. representative of real diverse content, not a best-case. C=2 scaled ~2× (~675 tok/s short-ctx); higher-concurrency cells were capacity-limited at the 300 W cap and are omitted as unreliable. *(30 s/cell, 2× RTX PRO 6000 / TP2 / 300 W.)*
+| ctx \ conc | 1 | 2 | 4 | 8 | 16 | 32 | 64 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 0 | **351** | 675 | 310 | 451 | 433* | 437* | 438* |
+| 16K | 342 | 651 | 241 | 417 | 412* | 415* | 423* |
+| 32K | 340 | 647 | 303 | 407 | 400* | 376* | 397* |
+| 64K | 333 | 631* | 296 | 403* | 421* | 402* | — |
+| 128K | **320** | 603 | 325 | 403 | 379* | — | — |
+
+**Prefill** (single-prompt, integrated scout): 8K → **8,145** · 16K → 7,378 · 32K → 7,138 · 64K → 6,644 · 128K → **6,039** tok/s (TTFT 1.0–21.4 s).
+
+`*` = capacity-limited (warmup timed out); `—` = didn't fit the KV cache. **MTP acceptance** over the run: mean **2.31** / median 1.92 / ~44% (222 windows) — in line with estonia (2.4 / 46%), so representative of real content. Power: **2× 300 W = 600 W for inference** (the bench's whole-box panel reads all 4 GPUs on the machine — ignore its 1,200 W / 641 W totals).
+
+<details><summary>Raw bench dashboard (TUI)</summary>
+
+```
+── unholyapostolic · llm_decode_bench v0.4.24 · deepseek-v4-flash · TP2 · temp 1.0 · 30s/cell ──
+  Aggregate decode tok/s
+   ctx\conc │   1 │   2 │   4 │   8 │  16 │  32 │  64
+  ─────────┼─────┼─────┼─────┼─────┼─────┼─────┼─────
+   0        │ 351 │ 675 │ 310 │ 451 │ 433*│ 437*│ 438*
+   16k      │ 342 │ 651 │ 241 │ 417 │ 412*│ 415*│ 423*
+   32k      │ 340 │ 647 │ 303 │ 407 │ 400*│ 376*│ 397*
+   64k      │ 333 │ 631*│ 296 │ 403*│ 421*│ 402*│   —
+   128k     │ 320 │ 603 │ 325 │ 403 │ 379*│   — │   —
+  Prefill tok/s   8k→8145  16k→7378  32k→7138  64k→6644  128k→6039
+  MTP accept      mean 2.31 / median 1.92 / ~44%  (222 windows, k=3)
+  Power           GPU 2,3 @ 300W cap (600W inference)
+  Spec            mtp · k=3 · draft_sample_method=probabilistic
+```
+</details>
 
 ## What got the ~2× jump (in order of impact)
 1. **V2 model runner** (`VLLM_USE_V2_MODEL_RUNNER=1`) — the keystone. nsys profiling showed ~46% of each decode token was **GPU idle waiting on the host** (kernel-launch + piecewise-cudagraph gaps). The V2 runner collapses that per-sub-step host gap. Everything below only pays *because* of this.
