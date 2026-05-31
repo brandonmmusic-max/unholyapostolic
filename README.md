@@ -69,6 +69,8 @@ Full concurrency × context sweep. **`conc=1` is the clean single-user number**;
   Power           GPU 2,3 @ 300W cap (600W inference)
   Spec            mtp · k=3 · draft_sample_method=probabilistic
 ```
+
+Full raw bench log (NVIDIA P2P panel · config · prefill · the matrix · power): [benchmarks/llm_decode_bench_tp2_136k.log](benchmarks/llm_decode_bench_tp2_136k.log)
 </details>
 
 ## What got the ~2× jump (in order of impact)
@@ -85,6 +87,7 @@ The published image is ready to pull. To rebuild the #324 layer, see [`Dockerfil
 ## Repo contents
 - [`serve.sh`](serve.sh) — run the image with the 365-tok/s config
 - [`Dockerfile`](Dockerfile) — the DeepGEMM PR #324 build layer
+- [`benchmarks/llm_decode_bench_tp2_136k.log`](benchmarks/llm_decode_bench_tp2_136k.log) — full raw `llm_decode_bench` v0.4.24 TUI (TP2 / 136K run)
 - `README.md` — this file
 
 ## Known quirk (investigated — benign, concurrency-only)
