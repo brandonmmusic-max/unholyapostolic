@@ -33,7 +33,20 @@ vLLM's default `draft_sample_method="greedy"` makes the MTP drafter argmax-only,
 | 0.7 (typical chat) | **90.8 tok/s · accept 1.00 (0%)** | **357.5 tok/s · accept 3.99** |
 | 1.0 | 90.9 tok/s · accept 1.00 (0%) | **357.7 tok/s · accept 3.99** |
 
-*(single-user, k=3, 2× RTX PRO 6000 / TP2 / 300 W; accept = mean accepted length, max 4 at k=3.)*
+*(single-user, k=3, 2× RTX PRO 6000 / TP2 / 300 W; accept = mean accepted length, max 4 at k=3. The 3.99 above is on a predictable probe prompt; on diverse content acceptance averages ~2.3 — see the full benchmark below — but the decode-speed recovery holds regardless.)*
+
+## Full decode benchmark (`llm_decode_bench` v0.4.24, sampled @ temp 1.0, with the fix)
+Single-user decode under sampling across context lengths — the payoff of the fix (without it, all ~90 tok/s):
+
+| context | single-user decode (tok/s) | single-prompt prefill (tok/s) |
+|---|---:|---:|
+| short (0) | **351** | — |
+| 16K | 342 | 7,378 |
+| 32K | 340 | 7,138 |
+| 64K | 333 | 6,644 |
+| 128K | **320** | 6,039 |
+
+MTP acceptance over the full run: **mean 2.3 / ~44%** (222 windows) — consistent with estonia (2.4 / 46%), i.e. representative of real diverse content, not a best-case. C=2 scaled ~2× (~675 tok/s short-ctx); higher-concurrency cells were capacity-limited at the 300 W cap and are omitted as unreliable. *(30 s/cell, 2× RTX PRO 6000 / TP2 / 300 W.)*
 
 ## What got the ~2× jump (in order of impact)
 1. **V2 model runner** (`VLLM_USE_V2_MODEL_RUNNER=1`) — the keystone. nsys profiling showed ~46% of each decode token was **GPU idle waiting on the host** (kernel-launch + piecewise-cudagraph gaps). The V2 runner collapses that per-sub-step host gap. Everything below only pays *because* of this.
