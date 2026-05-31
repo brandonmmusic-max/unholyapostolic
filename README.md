@@ -107,6 +107,7 @@ The published image is ready to pull. [`Dockerfile`](Dockerfile) is the full rep
 - [`serve.sh`](serve.sh) — run the image with the full 365-tok/s config (all env + docker-runtime flags + host-prereq notes)
 - [`Dockerfile`](Dockerfile) — DeepGEMM PR #324 layer + baked runtime env
 - [`benchmarks/llm_decode_bench_tp2_136k.log`](benchmarks/llm_decode_bench_tp2_136k.log) — full raw `llm_decode_bench` v0.4.24 TUI (TP2 / 136K run)
+- [`VERSION_READOUT.md`](VERSION_READOUT.md) — exact pinned version + config manifest (vLLM / torch / b12x / deep_gemm / CUDA, host prereqs, model config, results)
 - `README.md` — this file
 
 ## Known quirk (investigated — benign, concurrency-only)
