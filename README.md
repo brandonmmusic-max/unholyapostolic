@@ -6,7 +6,26 @@ A tuned serving stack for **DeepSeek-V4-Flash** on **2× RTX PRO 6000 (sm_120, P
 ```bash
 docker pull verdictai/unholyapostolic:latest                    # Docker Hub
 docker pull ghcr.io/brandonmmusic-max/unholyapostolic:latest    # GitHub Container Registry
+
+# byte-exact pin (env-baked build, 2026-05-31) — same digest on both registries:
+docker pull verdictai/unholyapostolic@sha256:6fcfe17e80142e0ce182f816ce143d2d1803aca32a48ab63fb5f934004a362ad
 ```
+
+> **Validated stack:** driver **595.58.03** / CUDA **13.2**, 2× **RTX PRO 6000 Blackwell** (sm_120, PCIe, Resizable BAR on). The image bakes every required env var; `serve.sh` adds the docker-runtime flags. **One host step is required first → [Host prerequisites](#host-prerequisites-one-time).**
+
+## Host prerequisites (one-time)
+The b12x PCIe all-reduce needs **forced GPU↔GPU P2P**, which these no-NVLink cards only do with an NVIDIA driver override on the **host** (it can't live in the image). Without it you hit, during cudagraph capture:
+```
+torch.AcceleratorError: CUDA error: operation not permitted when stream is capturing
+  (cudaErrorStreamCaptureUnsupported, in b12x/.../pcie_oneshot.py → all_reduce)
+```
+Set it once and reboot:
+```bash
+echo 'options nvidia NVreg_RegistryDwords="ForceP2P=0x11;RMForceP2PType=1;RMPcieP2PType=2;GrdmaPciTopoCheckOverride=1;EnableResizableBar=1"' | sudo tee /etc/modprobe.d/nvidia-p2p-override.conf
+sudo update-initramfs -u   # Debian/Ubuntu/Pop!_OS; dracut -f on Fedora/RHEL
+sudo reboot
+```
+Verify after reboot: `nvidia-smi -q | grep -i bar1` shows BAR1 ≈ full VRAM. **No host access / don't want b12x?** add `-e VLLM_ENABLE_PCIE_ALLREDUCE=0` (standard NCCL all-reduce — a bit slower, boots anywhere).
 
 ## Run
 ```bash
@@ -82,11 +101,11 @@ Full raw bench log (NVIDIA P2P panel · config · prefill · the matrix · power
 6. **DeepGEMM PR #324** — the SM120 "complete odd/large next_n / kPadOddN port" — swapped in as a **site-packages wheel, no vLLM recompile** (`deep_gemm 2.5.0+76e93aa`, torch 2.11). Keeps the 365 decode and runs the upstreamed SM120 indexer-scoring kernels; validated **retrieval-preserving** (28/30 byte-identical estonia).
 
 ## Build
-The published image is ready to pull. To rebuild the #324 layer, see [`Dockerfile`](Dockerfile) — it documents the reproducible delta (DeepGEMM PR #324 swapped onto the unholy-fusion base; no vLLM recompile).
+The published image is ready to pull. [`Dockerfile`](Dockerfile) is the full reproducible recipe: DeepGEMM PR #324 swapped onto the unholy-fusion base (site-packages wheel, no vLLM recompile) **+ the baked runtime env** so a bare `docker run` is already correct. Pinned: `sha256:6fcfe17e…` (`:env-20260531`).
 
 ## Repo contents
-- [`serve.sh`](serve.sh) — run the image with the 365-tok/s config
-- [`Dockerfile`](Dockerfile) — the DeepGEMM PR #324 build layer
+- [`serve.sh`](serve.sh) — run the image with the full 365-tok/s config (all env + docker-runtime flags + host-prereq notes)
+- [`Dockerfile`](Dockerfile) — DeepGEMM PR #324 layer + baked runtime env
 - [`benchmarks/llm_decode_bench_tp2_136k.log`](benchmarks/llm_decode_bench_tp2_136k.log) — full raw `llm_decode_bench` v0.4.24 TUI (TP2 / 136K run)
 - `README.md` — this file
 

@@ -25,4 +25,26 @@ RUN set -eux; \
     python3 -c "import deep_gemm; print('deep_gemm', deep_gemm.__version__)"; \
     rm -rf "$tmp"
 
+# ── Baked runtime defaults (the validated unholyapostolic env) ──────────────────
+# So a bare `docker run <image> vllm serve ...` already carries the correct env.
+# serve.sh repeats these for self-containment. CUDA_VISIBLE_DEVICES stays per-run.
+# The one thing that CANNOT live here is the host NVIDIA P2P override (the b12x
+# PCIe all-reduce needs forced P2P on no-NVLink cards) — see README "Host prerequisites".
+ENV CUDA_DEVICE_ORDER=PCI_BUS_ID \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+    VLLM_WORKER_MULTIPROC_METHOD=spawn \
+    VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0 \
+    FLASHINFER_DISABLE_VERSION_CHECK=1 \
+    VLLM_USE_V2_MODEL_RUNNER=1 \
+    VLLM_ENABLE_PCIE_ALLREDUCE=1 \
+    VLLM_PCIE_ALLREDUCE_BACKEND=b12x \
+    VLLM_USE_B12X_MOE=1 \
+    VLLM_ALLREDUCE_USE_SYMM_MEM=0 \
+    VLLM_SPARSE_INDEXER_MAX_LOGITS_MB=2048 \
+    VLLM_ENABLE_DEEPSEEK_V4_SPARSE_MLA_WARMUP=1 \
+    NCCL_P2P_LEVEL=SYS \
+    NCCL_NET_GDR_LEVEL=SYS \
+    CUTE_DSL_ARCH=sm_120a \
+    TORCH_CUDA_ARCH_LIST=12.0a
+
 # Run with serve.sh (the 365-tok/s config: V2 runner + MTP k=3 + native indexer + parser-only reasoning).
