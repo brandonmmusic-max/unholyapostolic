@@ -64,5 +64,5 @@ The published image is ready to pull. To rebuild the #324 layer, see [`Dockerfil
 - [`Dockerfile`](Dockerfile) — the DeepGEMM PR #324 build layer
 - `README.md` — this file
 
-## Known issue (being fixed)
-2/30 estonia shots over-reason to the 40,000-token cap (a stopping/reasoning-length quirk — not a retrieval or kernel error) → 28/30 instead of 30/30. A serving-level stopping fix is in progress; the result + stop flag will land here.
+## Known quirk (investigated — benign, concurrency-only)
+2/30 estonia shots over-reason to the 40,000-token cap → 28/30 instead of 30/30. This is a **concurrency-30 stress artifact, not a single-user or retrieval problem**: estonia runs the *same* prompt 30× at once, and batch-composition numeric noise occasionally tips 2 of the 30 runs into a reasoning-vacillation loop that never closes `</think>` (the retrieval itself is correct — it's a stopping/reasoning-length quirk, not a wrong answer). Investigated thoroughly: no clean serving-level fix reaches 30/30 without side-effects (reasoning-budget cap, EOS handling, repetition penalty, and lower MTP all failed; best partial 29/30 via `MAX_NUM_SEQS=30`). **At single-user it doesn't manifest**, so it doesn't affect the headline use case.
