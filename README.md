@@ -1,7 +1,7 @@
 # unholyapostolic — DeepSeek-V4-Flash, consumer Blackwell (sm_120), TP2
 
 A tuned serving stack for **DeepSeek-V4-Flash** on **2× RTX PRO 6000 (sm_120, PCIe, no NVLink)** that roughly **doubles single-user decode** vs the original Lucifer image — at a **300 W per-GPU cap**.
-
+****************The output from the tested, is multilanguage garbage input, NAN.  so this resutls are not appropriate .***************
 ## Pull
 ```bash
 docker pull verdictai/unholyapostolic:latest                    # Docker Hub
